@@ -1,11 +1,65 @@
-import { ExplainContainer } from "@/components";
+import { BalanceList, ExplainContainer, PrimaryButton } from "@/components";
 import { IconDocumentation } from "@/components/icons/IconDocumentation";
-import { FNS_NFT_TOKEN_ID, FNS_NFT_ADDRESS } from "@/constants";
-import { useSignerStore } from "@/stores/wallet";
-import React from "react";
+import {
+  FNS_NFT_TOKEN_ID,
+  FNS_NFT_ADDRESS,
+  CHAIN_NAME,
+  LUNA_CW20_ADDRESS,
+  LUNA_CW20_OWNER_ADDRESS,
+} from "@/constants";
+import { fetchCW20Balance, fetchCW721Info } from "@/lib/queries";
+import {
+  useQueryClient,
+  useSignerStore,
+  useTendermintQueryClient,
+  useWasmQueryClient,
+} from "@/stores/wallet";
+import React, { useEffect, useState } from "react";
+import "./HomeView.css";
+import { Coin } from "@cosmjs/stargate";
+import { findAssetFromDenom } from "@/lib/utils";
+import type { DenomTrace } from "cosmjs-types/ibc/applications/transfer/v1/transfer";
 
 const HomeView: React.FC = (): React.ReactElement => {
   const { signer, connectToWallet, isConnected, account } = useSignerStore();
+  const { useInitializedClient: useInitializedCosmWasmClient } =
+    useWasmQueryClient();
+  const cosmwasmClient = useInitializedCosmWasmClient();
+  const { useInitializedClient: useInitializedTendermintClient } =
+    useTendermintQueryClient();
+  const tmClient = useInitializedTendermintClient();
+
+  const { useInitializedClient } = useQueryClient();
+  const stargateClient = useInitializedClient();
+
+  const [cw721Info, setcw721Info] = useState<{
+    name: string;
+    owner: string;
+    symbol: string;
+    image: string;
+    description: string;
+  } | null>(null);
+
+
+  const [cw20Info, setcw20Info] = useState<{
+    name: string;
+    symbol: string;
+    balance: number;
+  } | null>(null);
+
+  const [balances, setBalances] = useState<Coin[] | null>(null);
+  const [smartBalances, setSmartBalances] = useState<Coin[] | null>(null);
+  const [ibcDenoms, setIbcDenoms] = useState<DenomTrace[] | null>(null);
+
+  useEffect(() => {
+    async function fetchIbcDenoms() {
+      const client = await tmClient;
+      const { denomTraces } = await client.ibc.transfer.allDenomTraces();
+      setIbcDenoms(denomTraces);
+    }
+
+    fetchIbcDenoms();
+  }, [ibcDenoms, tmClient]);
 
   return (
     <>
@@ -20,14 +74,19 @@ const HomeView: React.FC = (): React.ReactElement => {
         >
           <>
             <div v-if="signerStore.isConnected">
-              <div>Your connected wallet address is:</div>
               <div v-if="accountDatas">
                 {account ? (
-                  <div className="address">{account.address}</div>
+                  <>
+                    <div>Your connected wallet address is:</div>
+
+                    <div className="address">{account.address}</div>
+                  </>
                 ) : (
-                  <button onClick={connectToWallet}>
-                    Connect to your fetch wallet
-                  </button>
+                  <div>
+                    <button onClick={connectToWallet}>
+                      Connect to your fetch wallet
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -47,18 +106,95 @@ const HomeView: React.FC = (): React.ReactElement => {
             </ExplainContainer.Icon>
           }
         >
-          <>
+          <div>
             An address' balances can be queried using the Stargate or CosmWasm
             client. These balances are raw and you'll need to take into account
             both the decimals and the actual token denomination to display
             something comprehensible to the users. Your own balances will be
             shown after connecting your wallet.
-            {/* TODO: implement balance list here */}
-            These balances will also include Interchain tokens, most commonly
-            known as IBC tokens. You'll be able to spot them thanks to their
-            special denomination as it starts with <code>ibc</code>.
+            {isConnected() && !balances && (
+              <div className="mt-2">
+                <PrimaryButton
+                  onClick={async () => {
+                    const initialized = await stargateClient;
+                    const balances = await initialized.getAllBalances(
+                      account!.address
+                    );
+                    setBalances([...balances]);
+
+                    setSmartBalances(
+                      balances
+                        .map((b) => {
+                          return {
+                            ...findAssetFromDenom(b.denom),
+                            ...b,
+                          };
+                        })
+                        .map((c) => {
+                          // NOTE: chain-registry is misconfigured for atestfet
+                          const decimals =
+                            c.denom_units?.find(
+                              (d) =>
+                                d.denom === c.display || d.denom === "testfet"
+                            )?.exponent ?? 1;
+                          return {
+                            amount: (
+                              Math.pow(10, -decimals) * parseInt(c.amount)
+                            ).toString(),
+                            denom: c.display ?? c.denom,
+                          };
+                        })
+                    );
+                  }}
+                >
+                  Query Balances
+                </PrimaryButton>
+              </div>
+            )}
+            {balances && (
+              <div>
+                <BalanceList
+                  balances={balances}
+                  title="Raw Balances"
+                ></BalanceList>
+              </div>
+            )}
+            {smartBalances && (
+              <div>
+                <BalanceList
+                  balances={smartBalances}
+                  title="Smart Balances"
+                ></BalanceList>
+              </div>
+            )}
+            <div className="mt-2">
+              These balances will also include Interchain tokens, most commonly
+              known as IBC tokens. You'll be able to spot them thanks to their
+              special denomination as it starts with <code>ibc</code>.
+            </div>
             <br />
-            {/* TODO: implement ibc denom list here */}
+            {ibcDenoms && (
+              <div>
+                <h4>
+                  The {CHAIN_NAME} network handles {ibcDenoms.length} such
+                  assets.
+                </h4>
+
+                <div className="mt-2">
+                  These are:
+                  <ul>
+                    {ibcDenoms.map((ibc) => {
+                      return (
+                        <li key={ibc.baseDenom}>
+                          <span className="symbol">{ibc.baseDenom}</span> using
+                          the ibc path {ibc.path}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </div>
+            )}
             <br />
             Any time you find yourself dealing with such a denomination, you can
             use the
@@ -72,7 +208,7 @@ const HomeView: React.FC = (): React.ReactElement => {
               chain registry repository
             </a>
             .
-          </>
+          </div>
         </ExplainContainer.Container>
 
         <ExplainContainer.Container
@@ -91,11 +227,41 @@ const HomeView: React.FC = (): React.ReactElement => {
             <br />
             Contrary to Native denominations, CW20 includes optional marketing
             info fields.
+            <div className="mt-2">
+              Balance for{" "}
+              <span className="address">{LUNA_CW20_OWNER_ADDRESS}</span> on the
+              sample <span className="address">{LUNA_CW20_ADDRESS}</span> token:
+            </div>
+            <div className="mt-2">
+              {cw20Info ? (
+                <div>
+                  <div>
+                    <div>{cw20Info.name}</div>
+
+                    <div>
+                      {cw20Info.balance.toFixed(5)}
+                      <span className="symbol"> {cw20Info.symbol}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <PrimaryButton
+                    onClick={async () => {
+                      const info = await fetchCW20Balance(await cosmwasmClient);
+                      setcw20Info(info);
+                    }}
+                  >
+                    Query Balance
+                  </PrimaryButton>
+                </div>
+              )}
+            </div>
           </>
         </ExplainContainer.Container>
 
         <ExplainContainer.Container
-          heading={<>Smart contract - NFTs (CW20)</>}
+          heading={<>Smart contract - NFTs (CW721)</>}
           icon={
             <ExplainContainer.Icon>
               <IconDocumentation></IconDocumentation>
@@ -113,6 +279,47 @@ const HomeView: React.FC = (): React.ReactElement => {
                 collection.
               </div>
             </div>
+
+            <div className="mt-2">
+              {cw721Info ? (
+                <div>
+                  <div className="nft__container">
+                    <div className="placeholder">
+                      <img src={cw721Info.image} />
+                    </div>
+                    <div className="">
+                      <div className="nft__container-title">
+                        {cw721Info.name}
+                        <span className="symbol">({cw721Info.symbol})</span>
+                      </div>
+
+                      <div>
+                        <div>
+                          <h5>Owner</h5>
+                          {cw721Info.owner}
+                        </div>
+                        <div>
+                          <h5>Description</h5>
+
+                          {cw721Info.description}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <PrimaryButton
+                    onClick={async () => {
+                      const info = await fetchCW721Info(await cosmwasmClient);
+                      setcw721Info(info);
+                    }}
+                  >
+                    Query NFT info
+                  </PrimaryButton>
+                </div>
+              )}
+            </div>
           </>
         </ExplainContainer.Container>
 
@@ -126,16 +333,14 @@ const HomeView: React.FC = (): React.ReactElement => {
         >
           <>
             If you need more resources on developing for Cosmos chains, we
-            suggest paying
-            {" "}
+            suggest paying{" "}
             <a
               href="https://github.com/cosmos/awesome-cosmos"
               target="_blank"
               rel="noopener"
             >
               Awesome Cosmos
-            </a>
-            {" "}
+            </a>{" "}
             a visit.
             <br />
             You can also discover innovative projects on the Fetch.ai blockchain
