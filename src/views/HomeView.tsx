@@ -73,8 +73,8 @@ const HomeView: React.FC = (): React.ReactElement => {
           }
         >
           <>
-            <div v-if="signerStore.isConnected">
-              <div v-if="accountDatas">
+            <div>
+              <div>
                 {account ? (
                   <>
                     <div>Your connected wallet address is:</div>
