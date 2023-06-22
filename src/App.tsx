@@ -1,18 +1,11 @@
-import { useState } from "react";
-import "./base.css";
+import "./index.css";
 import "./app.css";
+
 import { HelloWorld } from "./components/HelloWorld";
 import reactLogo from "@/assets/react.svg";
-import {
-  createBrowserRouter,
-  RouterProvider,
-  Link,
-  Outlet,
-} from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 function App() {
-  const [count, setCount] = useState(0);
-
   return (
     <>
       <header>

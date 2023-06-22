@@ -28,10 +28,10 @@ export const useSignerStore = create<SignerStore>((set, get) => {
         const keplr = window.keplr;
         await keplr.enable([CHAIN_ID]);
         const signer = keplr.getOfflineSigner(CHAIN_ID);
-        set((state) => ({ signer }));
+        set(() => ({ signer }));
 
         const accounts = await signer.getAccounts();
-        set((state) => ({
+        set(() => ({
           account: accounts[0],
         }));
       }
@@ -65,7 +65,7 @@ export const useQueryClient = create<QueryStore>((set, get) => {
 
       const client = await StargateClient.connect(rpc);
 
-      set((state) => ({
+      set(() => ({
         queryClient: client,
       }));
     },
@@ -96,7 +96,7 @@ export const useWasmQueryClient = create<WasmQueryStore>((set, get) => {
 
       const client = await CosmWasmClient.connect(rpc);
 
-      set((state) => ({
+      set(() => ({
         queryClient: client,
       }));
     },
@@ -130,7 +130,7 @@ export const useTendermintQueryClient = create<TendermintQueryStore>(
 
         const client = setupIbcExtension(new QueryClient(tm));
 
-        set((state) => ({
+        set(() => ({
           queryClient: client,
         }));
       },

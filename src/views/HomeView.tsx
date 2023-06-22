@@ -21,7 +21,7 @@ import { findAssetFromDenom } from "@/lib/utils";
 import type { DenomTrace } from "cosmjs-types/ibc/applications/transfer/v1/transfer";
 
 const HomeView: React.FC = (): React.ReactElement => {
-  const { signer, connectToWallet, isConnected, account } = useSignerStore();
+  const { connectToWallet, isConnected, account } = useSignerStore();
   const { useInitializedClient: useInitializedCosmWasmClient } =
     useWasmQueryClient();
   const cosmwasmClient = useInitializedCosmWasmClient();
@@ -39,7 +39,6 @@ const HomeView: React.FC = (): React.ReactElement => {
     image: string;
     description: string;
   } | null>(null);
-
 
   const [cw20Info, setcw20Info] = useState<{
     name: string;
